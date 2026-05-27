@@ -1,0 +1,27 @@
+.vscode/
+
+# CMake build directories
+build/
+out/
+bin/
+
+# Personal overrides
+CMakeUserPresets.json
+
+# vcpkg manifest mode cache
+vcpkg_installed/
+
+# VS Code specific caches
+.vscode/.cmaketools.json
+.cache/
+
+# Visual Studio cache
+.vs/
+*.user
+
+# Compiled binaries and generated files
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk

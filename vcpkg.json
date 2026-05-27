@@ -1,0 +1,12 @@
+{
+  "name": "vulkan-rotating-cubes",
+  "version": "1.0.0",
+  "builtin-baseline": "9c8fdb050b56037716294904d0a4585389b1fa74",
+  "dependencies": [
+    "vulkan",
+    "vulkan-memory-allocator-hpp",
+    "glfw3",
+    "glm",
+    "stb"
+  ]
+}
