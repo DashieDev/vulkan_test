@@ -5,6 +5,8 @@ add_executable(VulkanTest1
     "src/main.cpp"
     "src/App.hpp"
     "src/App.cpp"
+    "src/utils.hpp"
+    "src/utils.cpp"
 )
 
 find_package(glfw3 CONFIG REQUIRED)
