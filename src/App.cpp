@@ -15,6 +15,22 @@ constexpr bool ENABLE_VALIDATIONS_LAYERS = false;
 constexpr bool ENABLE_VALIDATIONS_LAYERS = true;
 #endif
 
+App* App::SHARED_INSTANCE = nullptr;
+
+App& App::get() {
+    assert(SHARED_INSTANCE != nullptr && "App instance is not initialized!");
+    return *SHARED_INSTANCE;
+}
+
+App::App() {
+    assert(App::SHARED_INSTANCE == nullptr && "App instance already exists!");
+    SHARED_INSTANCE = this;
+}
+
+App::~App() {
+    SHARED_INSTANCE = nullptr;
+}
+
 void App::initWindow() {
     glfwInit();
 
@@ -46,6 +62,19 @@ void App::cleanup() {
     glfwTerminate();
 }
 
+
+namespace {
+    std::vector<const char*> getRequiredInstanceExtensions() {
+        auto required_extensions = GLFWUtil::getRequiredInstanceExtensions()
+            | RangesUtil::toList();
+
+        if (ENABLE_VALIDATIONS_LAYERS) {
+            required_extensions.push_back(vk::EXTDebugUtilsExtensionName);
+        }
+        return required_extensions;
+    }
+}
+
 void VulkanContext::initInstance() {
     auto appInfo = vk::ApplicationInfo()
         .setPApplicationName("Rotating Cubes")
@@ -55,13 +84,7 @@ void VulkanContext::initInstance() {
         .setApiVersion(vk::ApiVersion14);
 
 
-    auto required_extensions = GLFWUtil::getRequiredInstanceExtensions()
-        | RangesUtil::toList();
-
-    if (ENABLE_VALIDATIONS_LAYERS) {
-        required_extensions.push_back(vk::EXTDebugUtilsExtensionName);
-    }
-
+    auto required_extensions = getRequiredInstanceExtensions();
     
     auto provided_extensions = this->vkContext.enumerateInstanceExtensionProperties();
     auto missing_extension = RangesUtil::strView(required_extensions) 
@@ -141,6 +164,11 @@ void VulkanContext::initDebugMsgr() {
     this->debugMessenger = this->vkInstance.createDebugUtilsMessengerEXT(debug_msgr_args);
 }
 
+void VulkanContext::initSurface() {
+    VkSurfaceKHR surface;
+    //if (glfwCreateWindowSurface(*(this->vkInstance), )
+}
+
 
 namespace {
     bool isDeviceSuitable(const vk::raii::PhysicalDevice& device) {
@@ -183,8 +211,6 @@ namespace {
 }
 
 void VulkanContext::pickPhysicalDevice() {
-    bool isDeviceSuitable(const vk::raii::PhysicalDevice& physicalDevice);
-
     auto physical_devices = this->vkInstance.enumeratePhysicalDevices();
     if (physical_devices.empty())
         throw std::runtime_error("Can't find GPU with Vulkan Support");
@@ -206,6 +232,48 @@ void VulkanContext::pickPhysicalDevice() {
         + std::string(selected_device.value().getProperties().deviceName.data()));
 
     this->physicalDevice = selected_device.value();
+}
+
+void VulkanContext::createLogicalDevice() {
+    auto queue_family_props = this->physicalDevice.getQueueFamilyProperties();
+    auto selected_qf_props = std::ranges::find_if(queue_family_props,
+        [](auto const& x) {
+            return (x.queueFlags & vk::QueueFlagBits::eGraphics) != static_cast<vk::QueueFlags>(0);
+        });
+    auto grahics_qf_index = static_cast<uint32_t>(std::distance(
+        queue_family_props.begin(), selected_qf_props
+    ));
+    
+    const float queue_priority = 0.5f;
+    const auto device_queue_create_args = vk::DeviceQueueCreateInfo()
+        .setQueueFamilyIndex(grahics_qf_index)
+        .setQueueCount(1)
+        .setPQueuePriorities(&queue_priority);
+    
+    
+    vk::StructureChain<
+        vk::PhysicalDeviceFeatures2, 
+        vk::PhysicalDeviceVulkan13Features, 
+        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
+    > using_device_feature = {
+        {},
+        vk::PhysicalDeviceVulkan13Features()
+            .setDynamicRendering(true),
+        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT()
+            .setExtendedDynamicState(true)
+    };
+
+
+    std::vector<const char*> required_device_ext = {vk::KHRSwapchainExtensionName};
+
+    auto device_create_args = vk::DeviceCreateInfo()
+        .setPNext(&using_device_feature.get<vk::PhysicalDeviceFeatures2>())
+        .setQueueCreateInfoCount(1)
+        .setPQueueCreateInfos(&device_queue_create_args)
+        .setPEnabledExtensionNames(required_device_ext);
+
+    this->device = vk::raii::Device(this->physicalDevice, device_create_args);
+    this->graphicsQueue = vk::raii::Queue(this->device, grahics_qf_index, 0);
 }
 
 

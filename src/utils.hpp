@@ -87,6 +87,29 @@ namespace RangesUtil {
     }
 
 
+    //====
+
+    template <typename Pred>
+    struct FirstMatchAtArgs { Pred pred; };
+
+    template <typename Pred>
+    inline auto firstMatchAt(Pred pred) -> FirstMatchAtArgs<Pred> {
+        return FirstMatchAtArgs{pred};
+    }
+
+    template <std::ranges::input_range R, typename Pred>
+    requires std::indirect_unary_predicate<Pred, std::ranges::iterator_t<R>>
+    auto operator| (R&& target, FirstMatchAtArgs<Pred> args) -> std::optional<int> {
+        auto at = std::ranges::find_if(target, std::move(args.pred));
+        if (at == std::ranges::end(target))
+            return std::nullopt;
+
+        return std::optional(std::distance(std::begin(target), at));
+    }
+
+    //=====
+
+
     //So I don't have to create a dedicated named variable for the pipeline
     template <std::ranges::input_range R>
     auto toList(R&& target) -> std::vector<std::ranges::range_value_t<R>> {
