@@ -5,12 +5,19 @@ class VulkanContext {
 public:
     inline void init() {
         this->initInstance();
+        this->initDebugMsgr();
+        this->pickPhysicalDevice();
     }
 private:
     vk::raii::Context vkContext;
-    vk::raii::Instance vkInstance{NULL};
+    vk::raii::Instance vkInstance{nullptr};
+    vk::raii::DebugUtilsMessengerEXT debugMessenger = nullptr;
+    
+    vk::raii::PhysicalDevice physicalDevice = nullptr;
 
     void initInstance();
+    void initDebugMsgr();
+    void pickPhysicalDevice();
 
 };
 

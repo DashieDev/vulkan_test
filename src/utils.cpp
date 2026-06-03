@@ -76,6 +76,10 @@ void ChopinLogger::l(const std::string& msg) {
     std::cout << msg;
 }
 
+void ChopinLogger::ln(const std::string& msg) {
+    std::cout << msg << std::endl;
+}
+
 void ChopinLogger::l(const std::exception& exception) {
     std::cout << exception.what();
 }

@@ -11,6 +11,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <ranges>
 #include <GLFW/glfw3.h>
+#include <algorithm>
 
 namespace ColorUtils {
     
@@ -36,66 +37,53 @@ namespace FileUtils {
 namespace ChopinLogger {
     void l(const std::string& msg);
     void l(const std::exception& exception);
+    void ln(const std::string& msg);
     void lerr(const std::string& msg);
 }
 
 namespace RangesUtil {
 
-    template <std::ranges::input_range R, typename Pred>
-    requires std::indirect_unary_predicate<Pred, std::ranges::iterator_t<R>>
-    auto findIf(R&& target, Pred pred) -> std::optional<std::ranges::range_value_t<R>> {
-        auto found_at = std::ranges::find_if(target, std::move(pred));
-        if (found_at != std::ranges::end(target)) {
-            return std::optional(*found_at);
-        }
-        return std::nullopt;
+    enum class MatchType { Any, All, None };
+    template <typename Pred, MatchType type>
+    struct AnyMatchArgs { Pred pred; };
+
+    template <typename Pred>
+    auto anyMatch(Pred pred) -> AnyMatchArgs<Pred, MatchType::Any> {
+        return AnyMatchArgs<Pred, MatchType::Any>{std::move(pred)};
     }
 
     template <typename Pred>
-    struct FindIfArgs { Pred pred; };
+    auto noMatch(Pred pred) -> AnyMatchArgs<Pred, MatchType::None> {
+        return AnyMatchArgs<Pred, MatchType::None>{std::move(pred)};
+    }
 
     template <typename Pred>
-    auto findIf(Pred pred) -> FindIfArgs<Pred> {
-        return FindIfArgs<Pred>{std::move(pred)};
+    auto allMatch(Pred pred) -> AnyMatchArgs<Pred, MatchType::All> {
+        return AnyMatchArgs<Pred, MatchType::All>{std::move(pred)};
     }
 
-    template <std::ranges::input_range R, typename Pred>
+    template <std::ranges::input_range R, typename Pred, MatchType Type>
     requires std::indirect_unary_predicate<Pred, std::ranges::iterator_t<R>>
-    auto operator| (R&& target, FindIfArgs<Pred> args) -> std::optional<std::ranges::range_value_t<R>> {
-        auto found_at = std::ranges::find_if(target, std::move(args.pred));
-        if (found_at != std::ranges::end(target)) {
-            return std::optional(*found_at);
+    auto operator| (R&& target, AnyMatchArgs<Pred, Type> args) -> bool {
+        if constexpr (Type == MatchType::All) {
+            return std::ranges::all_of(target, std::move(args.pred));
+        } else if constexpr (Type == MatchType::None) {
+            return std::ranges::none_of(target, std::move(args.pred));
+        } else {
+            return std::ranges::any_of(target, std::move(args.pred));
         }
-        return std::nullopt;
     }
 
-    
-    template <typename T, std::ranges::input_range R>
-    requires std::equality_comparable_with<std::ranges::range_reference_t<R>, const T&>
-    auto find(R&& target, const T& toCompare) -> std::optional<T> {
-        auto found_at = std::ranges::find(target, toCompare);
-        if (found_at != std::ranges::end(target)) {
-            return std::optional<T>(*found_at);
-        }
-        return std::nullopt;
+
+    struct FindFirstArgs {};
+
+    inline auto findFirst() -> FindFirstArgs {
+        return FindFirstArgs{};
     }
 
-    template <typename T>
-    struct FindArgs { T value; };
-
-    template <typename T>
-    auto find(T value) -> FindArgs<T> {
-        return FindArgs<T>{std::move(value)};
-    }
-
-    template <typename T, std::ranges::input_range R>
-    requires std::equality_comparable_with<std::ranges::range_reference_t<R>, const T&>
-    auto operator| (R&& target, FindArgs<T> args) -> std::optional<T> {
-        auto found_at = std::ranges::find(target, std::move(args.value));
-        if (found_at != std::ranges::end(target)) {
-            return std::optional<T>(*found_at);
-        }
-        return std::nullopt;
+    template <std::ranges::input_range R>
+    auto operator| (R&& target, FindFirstArgs) {
+        return std::forward<R>(target) | std::views::take(1); 
     }
 
 
@@ -108,8 +96,10 @@ namespace RangesUtil {
             vec.reserve(std::ranges::size(target));
         }
         
-        for (auto&& val : target) {
-            vec.push_back(std::forward<decltype(val)>(val));
+        if constexpr (!std::is_reference_v<R>) {
+            std::ranges::move(target, std::back_inserter(vec));
+        } else {
+            std::ranges::copy(target, std::back_inserter(vec));
         }
         return vec;
     }
@@ -123,6 +113,34 @@ namespace RangesUtil {
     template <std::ranges::input_range R>
     auto operator| (R&& target, ToListArgs args) -> std::vector<std::ranges::range_value_t<R>> {
         return toList(std::forward<R>(target));
+    }
+
+
+    template <std::ranges::input_range R>
+    requires std::same_as<std::ranges::range_value_t<R>, const char*>
+    inline auto strView(R&& target) {
+        return std::forward<R>(target) | std::views::transform([](const char* str) 
+            { return std::string_view(str); });
+    }
+
+    struct ToOptionalArgs {};
+    inline auto asOptional() { return ToOptionalArgs{}; }
+
+    template <std::ranges::input_range R>
+    auto operator| (R&& target, ToOptionalArgs) -> std::optional<std::ranges::range_value_t<R>> {
+        if (std::ranges::empty(target)) {
+            return std::nullopt;
+        }
+        return *std::ranges::begin(target); // or std::optional(std::ranges::iter_move(std::ranges::begin(target)))
+    }
+
+    struct PresentArgs { bool inverted; };
+    inline auto isPresent() { return PresentArgs{false}; }
+    inline auto isEmpty() { return PresentArgs{true}; }
+
+    template <std::ranges::input_range R>
+    auto operator| (R&& target, PresentArgs) -> bool {
+        return !std::ranges::empty(target);
     }
 }
 
@@ -141,10 +159,10 @@ namespace ListUtil {
 namespace GLFWUtil {
 
     inline auto getRequiredInstanceExtensions() {
-        uint32_t glfw_required_extensions_count = 0;
-        auto glfw_required_extensions_ptr = glfwGetRequiredInstanceExtensions(&glfw_required_extensions_count);
+        uint32_t gflw_required_count = 0;
+        auto glfw_required_ptr = glfwGetRequiredInstanceExtensions(&gflw_required_count);
         
-        return std::views::counted(glfw_required_extensions_ptr, glfw_required_extensions_count);
+        return std::views::counted(glfw_required_ptr, gflw_required_count);
     }
 
 }
