@@ -12,6 +12,7 @@
 #include <ranges>
 #include <GLFW/glfw3.h>
 #include <algorithm>
+#include <stdexcept>
 
 namespace ColorUtils {
     
@@ -165,6 +166,31 @@ namespace RangesUtil {
     auto operator| (R&& target, PresentArgs) -> bool {
         return !std::ranges::empty(target);
     }
+}
+
+namespace OptionalUtil {
+
+    struct OrElseThrowArgs { std::string_view str; };
+
+    inline auto orElseThrow(std::string_view str) -> OrElseThrowArgs {
+        return OrElseThrowArgs{str};
+    }
+
+    template<typename T>
+    auto operator| (const std::optional<T>& target, OrElseThrowArgs args) -> T {
+        if (!target.has_value())
+            throw std::runtime_error(std::string(args.str));
+        return target.value();
+    } 
+
+    template<typename T>
+    auto operator| (std::optional<T>&& target, OrElseThrowArgs args) -> T {
+        if (!target.has_value()) {
+            throw std::runtime_error(std::string(args.str));
+        }
+        return std::move(target.value()); 
+    }
+
 }
 
 namespace AssetsUtil {

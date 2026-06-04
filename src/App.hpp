@@ -19,7 +19,7 @@ private:
     vk::raii::PhysicalDevice physicalDevice = nullptr;
     vk::raii::Device device = nullptr;
     vk::PhysicalDeviceFeatures deviceFeatures;
-    vk::raii::Queue graphicsQueue = nullptr;
+    vk::raii::Queue queue = nullptr;
 
     void initInstance();
     void initDebugMsgr();
@@ -41,11 +41,13 @@ public:
         this->mainLoop();
         this->cleanup();
     }
+
+    inline GLFWwindow* getWindow() { return this->window; }
 private:
     static App* SHARED_INSTANCE;
 
-    const int WINDOW_W = 800;
-    const int WINDOW_H = 600;
+    static const int WINDOW_W = 800;
+    static const int WINDOW_H = 600;
 
     GLFWwindow* window;
     VulkanContext vulkanContext;

@@ -165,8 +165,15 @@ void VulkanContext::initDebugMsgr() {
 }
 
 void VulkanContext::initSurface() {
-    VkSurfaceKHR surface;
-    //if (glfwCreateWindowSurface(*(this->vkInstance), )
+    App& app = App::get();
+    auto window = app.getWindow();
+    
+    VkSurfaceKHR surface_raw;
+    if (glfwCreateWindowSurface(*(this->vkInstance), window, nullptr, &surface_raw) != 0) {
+        throw std::runtime_error("Failed to create Window Surface!");
+    }
+
+    this->surface = vk::raii::SurfaceKHR(this->vkInstance, surface_raw);
 }
 
 
@@ -236,27 +243,25 @@ void VulkanContext::pickPhysicalDevice() {
 
 void VulkanContext::createLogicalDevice() {
     auto queue_family_props = this->physicalDevice.getQueueFamilyProperties();
-    auto selected_qf_props = std::ranges::find_if(queue_family_props,
-        [](auto const& x) {
-            return (x.queueFlags & vk::QueueFlagBits::eGraphics) != static_cast<vk::QueueFlags>(0);
-        });
-    auto grahics_qf_index = static_cast<uint32_t>(std::distance(
-        queue_family_props.begin(), selected_qf_props
-    ));
-    
+
+    auto queue_family_index = 
+        std::views::iota(0u, static_cast<uint32_t>(queue_family_props.size()))
+        | std::views::filter([&](uint32_t indx) {
+            auto queue_flags = queue_family_props[indx].queueFlags;
+            return (queue_flags & vk::QueueFlagBits::eGraphics)
+                && this->physicalDevice.getSurfaceSupportKHR(indx, *(this->surface));
+        }) | RangesUtil::findFirst() | RangesUtil::asOptional()
+        | OptionalUtil::orElseThrow("Can't find a sutable queue that support both graphics and presenting");
+
     const float queue_priority = 0.5f;
     const auto device_queue_create_args = vk::DeviceQueueCreateInfo()
-        .setQueueFamilyIndex(grahics_qf_index)
+        .setQueueFamilyIndex(queue_family_index)
         .setQueueCount(1)
         .setPQueuePriorities(&queue_priority);
     
     
-    vk::StructureChain<
-        vk::PhysicalDeviceFeatures2, 
-        vk::PhysicalDeviceVulkan13Features, 
-        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
-    > using_device_feature = {
-        {},
+    auto using_device_feature = vk::StructureChain{
+        vk::PhysicalDeviceFeatures2(),
         vk::PhysicalDeviceVulkan13Features()
             .setDynamicRendering(true),
         vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT()
@@ -273,7 +278,7 @@ void VulkanContext::createLogicalDevice() {
         .setPEnabledExtensionNames(required_device_ext);
 
     this->device = vk::raii::Device(this->physicalDevice, device_create_args);
-    this->graphicsQueue = vk::raii::Queue(this->device, grahics_qf_index, 0);
+    this->queue = vk::raii::Queue(this->device, queue_family_index, 0);
 }
 
 

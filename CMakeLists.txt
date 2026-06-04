@@ -26,6 +26,12 @@ target_link_libraries(VulkanTest1 PRIVATE
 # Use C++20
 target_compile_features(VulkanTest1 PRIVATE cxx_std_20)
 
+target_compile_definitions(VulkanTest1 PRIVATE 
+    GLFW_INCLUDE_VULKAN
+    GLM_FORCE_RADIANS
+    GLM_FORCE_DEPTH_ZERO_TO_ONE
+)
+
 add_custom_command(
     TARGET VulkanTest1 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
