@@ -27,7 +27,13 @@ namespace ColorUtils {
 }
 
 namespace Mth {
-    float clamp(float x, float min, float max);
+    template <typename T>
+    requires std::integral<T> || std::floating_point<T>
+    constexpr T clamp(T value, std::type_identity_t<T> min, std::type_identity_t<T> max) {
+        if (value < min) return min;
+        if (value > max) return max;
+        return value;
+    }
     float normNDC(float x);
 }
 

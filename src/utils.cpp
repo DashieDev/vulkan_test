@@ -44,14 +44,6 @@ int ColorUtils::RGB::lerpColor(float progress, int color1, int color2) {
     return toInt(color_array);
 }
 
-
-
-float Mth::clamp(float x, float min, float max) {
-    if (min > max)
-        throw std::runtime_error("Max cannot be lesser than Min");
-    return std::min(std::max(min, x), max);
-}
-
 float Mth::normNDC(float ndc) {
     return clamp((ndc + 1)/2, 0.0f, 1.0f);
 }
