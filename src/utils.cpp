@@ -65,19 +65,15 @@ std::string FileUtils::readFileToString(const std::string& filename) {
 
 
 void ChopinLogger::l(const std::string& msg) {
-    std::cout << msg;
-}
-
-void ChopinLogger::ln(const std::string& msg) {
     std::cout << msg << std::endl;
 }
 
 void ChopinLogger::l(const std::exception& exception) {
-    std::cout << exception.what();
+    std::cout << exception.what() << std::endl;;
 }
 
 void ChopinLogger::lerr(const std::string& msg) {
-    std::cerr << msg;
+    std::cerr << msg << std::endl;
 }
 
 std::string AssetsUtil::res(const std::string& path) {

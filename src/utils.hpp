@@ -44,7 +44,6 @@ namespace FileUtils {
 namespace ChopinLogger {
     void l(const std::string& msg);
     void l(const std::exception& exception);
-    void ln(const std::string& msg);
     void lerr(const std::string& msg);
 }
 

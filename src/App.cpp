@@ -222,10 +222,10 @@ void VulkanContext::pickPhysicalDevice() {
     if (physical_devices.empty())
         throw std::runtime_error("Can't find GPU with Vulkan Support");
 
-    ChopinLogger::ln("Vulkan devices:");
+    ChopinLogger::l("Vulkan devices:");
     for (const auto& device : physical_devices) {
         auto props = device.getProperties();
-        ChopinLogger::ln(props.deviceName);
+        ChopinLogger::l(props.deviceName);
     }
 
     auto selected_device = physical_devices 
@@ -235,7 +235,7 @@ void VulkanContext::pickPhysicalDevice() {
     if (!selected_device.has_value())
         throw std::runtime_error("Can't find any suitable Vulkan devices");
     
-    ChopinLogger::ln(std::string("Selecting Vulkan device: ") 
+    ChopinLogger::l(std::string("Selecting Vulkan device: ") 
         + std::string(selected_device.value().getProperties().deviceName.data()));
 
     this->physicalDevice = selected_device.value();
