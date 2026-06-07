@@ -9,6 +9,7 @@ public:
         this->initSurface();
         this->pickPhysicalDevice();
         this->createLogicalDevice();
+        this->createSwapChain();
     };
 private:
     vk::raii::Context vkContext;
@@ -17,15 +18,21 @@ private:
     vk::raii::SurfaceKHR surface = nullptr;
     
     vk::raii::PhysicalDevice physicalDevice = nullptr;
-    vk::raii::Device device = nullptr;
     vk::PhysicalDeviceFeatures deviceFeatures;
+    vk::raii::Device device = nullptr;
     vk::raii::Queue queue = nullptr;
+
+    vk::raii::SwapchainKHR swapChain = nullptr;
+    vk::SurfaceFormatKHR swapChainSurfaceFormat;
+    vk::Extent2D swapChainExtent;
+    std::vector<vk::Image> swapChainImages;
 
     void initInstance();
     void initDebugMsgr();
     void initSurface();
     void pickPhysicalDevice();
     void createLogicalDevice();
+    void createSwapChain();
 };
 
 class App {

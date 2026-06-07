@@ -4,6 +4,9 @@
 #include "utils.hpp"
 #include <ranges>
 #include <span>
+#include <cstdint>
+#include <limits>
+#include <algorithm>
 
 const std::vector<const char*> APP_VALIDATIONS_LAYERS = {
     "VK_LAYER_KHRONOS_validation"
@@ -282,4 +285,99 @@ void VulkanContext::createLogicalDevice() {
 }
 
 
+namespace {
+    vk::SurfaceFormatKHR chooseSwapSurfaceFormat(
+        const std::vector<vk::SurfaceFormatKHR>& providedFormats) {
+        
+        assert(!providedFormats.empty());
 
+        auto ideal_format = providedFormats
+            | std::views::filter([](const auto &format) { 
+                return format.format == vk::Format::eB8G8R8A8Srgb 
+                && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear; 
+            })
+            | RangesUtil::findFirst();
+
+        if (!ideal_format.empty())
+            return ideal_format.front();
+
+        return providedFormats[0];
+    }
+
+    vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& providedPresentMode) {
+        const bool has_efifo = providedPresentMode 
+            | RangesUtil::anyMatch([](auto presentMode) { 
+                return presentMode == vk::PresentModeKHR::eFifo; 
+            });
+
+        assert(has_efifo);
+
+        const bool has_mailbox = providedPresentMode 
+            | RangesUtil::anyMatch([](auto presentMode) { 
+                return presentMode == vk::PresentModeKHR::eMailbox; 
+            });
+        
+        return has_mailbox ? vk::PresentModeKHR::eMailbox 
+            : vk::PresentModeKHR::eFifo;
+    }
+
+    vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities) {
+        const bool do_choose_extent = 
+            capabilities.currentExtent.width == std::numeric_limits<uint32_t>::max();
+        if (!do_choose_extent) {
+            return capabilities.currentExtent;
+        }
+
+        App& app = App::get();
+        int width, height;
+        glfwGetFramebufferSize(app.getWindow(), &width, &height);
+
+        return {
+            Mth::clamp<uint32_t>(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+            Mth::clamp<uint32_t>(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+        };
+    }
+
+    uint32_t chooseSwapMinImageCount(const vk::SurfaceCapabilitiesKHR& surfaceCapabilities) {
+        const uint32_t ideal_value = 3;
+
+        const uint32_t surface_min = surfaceCapabilities.minImageCount;
+        const uint32_t surface_max = surfaceCapabilities.maxImageCount;
+
+        const bool has_max = surfaceCapabilities.maxImageCount > 0;
+        
+        return has_max ?
+            Mth::clamp<uint32_t>(ideal_value, surface_min, surface_max)
+            : std::max(surface_min, ideal_value);
+    }
+}
+
+void VulkanContext::createSwapChain() {
+    auto surface_cap = this->physicalDevice.getSurfaceCapabilitiesKHR( *(this->surface) );
+    this->swapChainExtent = chooseSwapExtent(surface_cap);
+    uint32_t min_image_count = chooseSwapMinImageCount(surface_cap);
+    
+    auto provided_formats = this->physicalDevice.getSurfaceFormatsKHR( *(this->surface) );
+    this->swapChainSurfaceFormat = chooseSwapSurfaceFormat(provided_formats);
+
+    auto provided_present_modes = this->physicalDevice.getSurfacePresentModesKHR( surface );
+    auto present_mode = chooseSwapPresentMode(provided_present_modes);
+
+    auto swap_chain_create_args = vk::SwapchainCreateInfoKHR()
+        .setSurface(*surface)
+        .setMinImageCount(min_image_count)
+        .setImageFormat(this->swapChainSurfaceFormat.format)
+        .setImageColorSpace(this->swapChainSurfaceFormat.colorSpace)
+        .setImageExtent(this->swapChainExtent)
+        .setPresentMode(present_mode)
+        .setImageArrayLayers(1)
+        .setImageUsage(vk::ImageUsageFlagBits::eColorAttachment)
+        .setImageSharingMode(vk::SharingMode::eExclusive)
+        .setPreTransform(surface_cap.currentTransform)
+        .setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
+        .setClipped(true);
+
+    this->swapChain = vk::raii::SwapchainKHR(this->device, swap_chain_create_args);
+    this->swapChainImages = this->swapChain.getImages();
+    ChopinLogger::l("Accquired swap Chain with " + std::to_string(this->swapChainImages.size()) + " images");
+}
