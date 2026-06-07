@@ -379,5 +379,5 @@ void VulkanContext::createSwapChain() {
 
     this->swapChain = vk::raii::SwapchainKHR(this->device, swap_chain_create_args);
     this->swapChainImages = this->swapChain.getImages();
-    ChopinLogger::l("Accquired swap Chain with " + std::to_string(this->swapChainImages.size()) + " images");
+    ChopinLogger::l("Accquired swap chain with " + std::to_string(this->swapChainImages.size()) + " images");
 }
