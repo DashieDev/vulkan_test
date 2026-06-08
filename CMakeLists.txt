@@ -39,3 +39,5 @@ add_custom_command(
         "$<TARGET_FILE_DIR:VulkanTest1>/assets"
     COMMENT "Copying assets to the build directory..."
 )
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

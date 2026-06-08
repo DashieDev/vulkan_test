@@ -1,5 +1,5 @@
 #include <GLFW/glfw3.h>
-#include<vulkan/vulkan_raii.hpp>
+#include <vulkan/vulkan_raii.hpp>
 
 class VulkanContext {
 public:
@@ -10,6 +10,8 @@ public:
         this->pickPhysicalDevice();
         this->createLogicalDevice();
         this->createSwapChain();
+        this->createImageViews();
+        this->setupRenderPipeline();
     };
 private:
     vk::raii::Context vkContext;
@@ -26,6 +28,7 @@ private:
     vk::SurfaceFormatKHR swapChainSurfaceFormat;
     vk::Extent2D swapChainExtent;
     std::vector<vk::Image> swapChainImages;
+    std::vector<vk::raii::ImageView> swapChainImageViews;
 
     void initInstance();
     void initDebugMsgr();
@@ -33,6 +36,8 @@ private:
     void pickPhysicalDevice();
     void createLogicalDevice();
     void createSwapChain();
+    void createImageViews();
+    void setupRenderPipeline();
 };
 
 class App {

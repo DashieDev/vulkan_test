@@ -381,3 +381,28 @@ void VulkanContext::createSwapChain() {
     this->swapChainImages = this->swapChain.getImages();
     ChopinLogger::l("Accquired swap chain with " + std::to_string(this->swapChainImages.size()) + " images");
 }
+
+void VulkanContext::createImageViews() {
+    assert(this->swapChainImageViews.empty());
+    
+    auto image_create_args = vk::ImageViewCreateInfo()
+        .setViewType(vk::ImageViewType::e2D)
+        .setFormat(this->swapChainSurfaceFormat.format)
+        .setSubresourceRange(
+            vk::ImageSubresourceRange()
+                .setAspectMask(vk::ImageAspectFlagBits::eColor)
+                .setBaseMipLevel(0)
+                .setLevelCount(1)
+                .setBaseArrayLayer(0)
+                .setLayerCount(1)
+        );
+
+    for (auto &image : swapChainImages){
+        this->swapChainImageViews
+            .emplace_back( device, image_create_args.setImage(image) );
+    }
+}
+
+void VulkanContext::setupRenderPipeline() {
+
+}
