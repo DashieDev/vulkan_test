@@ -9,7 +9,7 @@ function(target_compile_slang_shaders target_name)
         get_filename_component(shader_dir "${input_shader}" DIRECTORY)
         string(REGEX REPLACE "^src/?" "" shader_dir "${shader_dir}")
         
-        get_filename_component(shader_name "${input_shader}" NAME_WE)
+        get_filename_component(shader_name "${input_shader}" NAME_WLE)
 
         set(temp_output_dir "${SPV_TEMP_DIR}/${shader_dir}")
         file(MAKE_DIRECTORY "${temp_output_dir}")
@@ -27,6 +27,7 @@ function(target_compile_slang_shaders target_name)
                 -o "${spv_output}"
             DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${input_shader}"
             COMMENT "Compiling Slang shader: ${input_shader} -> ${spv_output}"
+            VERBATIM
         )
 
         list(APPEND spv_outputs "${spv_output}")
@@ -39,6 +40,7 @@ function(target_compile_slang_shaders target_name)
                 "${spv_output}"
                 "$<TARGET_FILE_DIR:${target_name}>/${shader_dir}/"
             COMMENT "Copying Compiled Shader ${shader_name}.spv to target directory ${shader_dir}/..."
+            VERBATIM
         )
     endforeach()
 

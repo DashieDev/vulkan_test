@@ -45,6 +45,7 @@ add_custom_command(
         "${CMAKE_SOURCE_DIR}/src/assets"
         "$<TARGET_FILE_DIR:VulkanTest1>/assets"
     COMMENT "Copying assets to the build directory..."
+    VERBATIM
 )
 
 target_compile_slang_shaders(VulkanTest1 
