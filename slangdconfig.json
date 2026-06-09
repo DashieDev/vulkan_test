@@ -1,0 +1,8 @@
+{
+    "slang.additionalSearchPaths": [
+        "${workspaceFolder}/src/shaders"
+    ],
+    "slang.predefinedMacros": [
+        "VULKAN=1"
+    ]
+}

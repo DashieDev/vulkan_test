@@ -1,12 +1,19 @@
 cmake_minimum_required(VERSION 3.20)
 project(VulkanTest1 VERSION 1.0.0 LANGUAGES C CXX)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(SlangUtils)
+
 add_executable(VulkanTest1 
     "src/main.cpp"
     "src/App.hpp"
     "src/App.cpp"
     "src/utils.hpp"
     "src/utils.cpp"
+)
+
+set_target_properties(VulkanTest1 PROPERTIES 
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 find_package(glfw3 CONFIG REQUIRED)
@@ -38,6 +45,10 @@ add_custom_command(
         "${CMAKE_SOURCE_DIR}/src/assets"
         "$<TARGET_FILE_DIR:VulkanTest1>/assets"
     COMMENT "Copying assets to the build directory..."
+)
+
+target_compile_slang_shaders(VulkanTest1 
+    "src/shaders/shader.slang"
 )
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

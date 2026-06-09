@@ -7,6 +7,7 @@
     "vulkan-memory-allocator-hpp",
     "glfw3",
     "glm",
-    "stb"
+    "stb",
+    "shader-slang"
   ]
 }
