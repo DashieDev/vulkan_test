@@ -407,7 +407,18 @@ void VulkanContext::createImageViews() {
 
 void VulkanContext::setupRenderPipeline() {
     
-    auto shader_result = SpirvUtil::shaderModuleAndStagesFromFile(this->device, "shaders/shader.spv");
+    const std::string shader_path = "shaders/shader.spv";
+    auto shader_result = SpirvUtil::shaderModuleAndStagesFromFile(this->device, shader_path);
+
+    ChopinLogger::l(std::format("Loaded SPIR-V Binary from : {}", shader_path));
+    for (const auto& entry : shader_result.pipelineStages) {
+        const auto msg = std::format(
+            "Discovered Entry Point for [ {} ] : Name = [ {} ] Stage = [ {} ]",
+            shader_path,
+            std::string_view(entry.pName), vk::to_string(entry.stage)
+        );
+        ChopinLogger::l(msg);
+    }
 
     auto dyanmic_states_list = std::vector<vk::DynamicState>{
         vk::DynamicState::eViewport, vk::DynamicState::eScissor
