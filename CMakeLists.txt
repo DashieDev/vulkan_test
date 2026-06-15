@@ -21,6 +21,7 @@ find_package(Stb REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 
 target_link_libraries(VulkanTest1 PRIVATE 
     glfw  
@@ -28,6 +29,7 @@ target_link_libraries(VulkanTest1 PRIVATE
     glm::glm
     Vulkan::Vulkan 
     GPUOpen::VulkanMemoryAllocator
+    unofficial::spirv-reflect
 )
 
 # Use C++20

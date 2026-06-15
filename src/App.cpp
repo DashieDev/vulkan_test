@@ -265,6 +265,8 @@ void VulkanContext::createLogicalDevice() {
     
     auto using_device_feature = vk::StructureChain{
         vk::PhysicalDeviceFeatures2(),
+        vk::PhysicalDeviceVulkan11Features()
+            .setShaderDrawParameters(true),
         vk::PhysicalDeviceVulkan13Features()
             .setDynamicRendering(true),
         vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT()
@@ -404,5 +406,90 @@ void VulkanContext::createImageViews() {
 }
 
 void VulkanContext::setupRenderPipeline() {
+    
+    auto shader_result = SpirvUtil::shaderModuleAndStagesFromFile(this->device, "shaders/shader.spv");
 
+    auto dyanmic_states_list = std::vector<vk::DynamicState>{
+        vk::DynamicState::eViewport, vk::DynamicState::eScissor
+    };
+    auto dynamic_state = vk::PipelineDynamicStateCreateInfo()
+        .setDynamicStates(dyanmic_states_list);
+    
+    auto vertex_layout = vk::PipelineVertexInputStateCreateInfo();
+
+    auto input_assembly = vk::PipelineInputAssemblyStateCreateInfo()
+        .setTopology(vk::PrimitiveTopology::eTriangleList);
+
+    // auto viewport = vk::Viewport()
+    //     .setX(0.f).setY(0.f)
+    //     .setWidth(this->swapChainExtent.width)
+    //     .setHeight(this->swapChainExtent.height)
+    //     .setMinDepth(0.f).setMaxDepth(1.f);
+    
+    // auto scrissor = vk::Rect2D()
+    //     .setOffset({0, 0}).setExtent(this->swapChainExtent);
+
+    auto viewport_state = vk::PipelineViewportStateCreateInfo()
+        .setViewportCount(1).setScissorCount(1);
+
+    auto rasterizer_state = vk::PipelineRasterizationStateCreateInfo()
+        .setDepthClampEnable(vk::False)
+        .setRasterizerDiscardEnable(vk::False)
+        .setPolygonMode(vk::PolygonMode::eFill)
+        .setCullMode(vk::CullModeFlagBits::eBack)
+        .setFrontFace(vk::FrontFace::eClockwise)
+        .setDepthBiasEnable(vk::False)
+        .setLineWidth(1.f);
+
+    auto multisampling_state = vk::PipelineMultisampleStateCreateInfo()
+        .setRasterizationSamples(vk::SampleCountFlagBits::e1)
+        .setSampleShadingEnable(vk::False);
+
+    auto blend_attachments = std::vector{
+        vk::PipelineColorBlendAttachmentState()
+            .setBlendEnable(true)
+            .setSrcColorBlendFactor(vk::BlendFactor::eSrcAlpha)
+            .setDstColorBlendFactor(vk::BlendFactor::eOneMinusSrcAlpha)
+            .setColorBlendOp(vk::BlendOp::eAdd)
+            .setSrcAlphaBlendFactor(vk::BlendFactor::eOne)
+            .setDstAlphaBlendFactor(vk::BlendFactor::eZero)
+            .setAlphaBlendOp(vk::BlendOp::eAdd)
+            .setColorWriteMask(
+                vk::ColorComponentFlagBits::eR 
+                | vk::ColorComponentFlagBits::eG 
+                | vk::ColorComponentFlagBits::eB 
+                | vk::ColorComponentFlagBits::eA
+    )};
+
+    auto blend_state = vk::PipelineColorBlendStateCreateInfo()
+        .setLogicOpEnable(vk::False)
+        .setLogicOp(vk::LogicOp::eCopy)
+        .setAttachments(blend_attachments);
+
+    auto pipeline_layout = vk::PipelineLayoutCreateInfo()
+        .setSetLayouts(nullptr)
+        .setPushConstantRanges(nullptr);
+
+    this->pipelineLayout = vk::raii::PipelineLayout(this->device, pipeline_layout);
+
+    auto pipeline_create_chain = vk::StructureChain{
+        vk::GraphicsPipelineCreateInfo()
+            .setPDynamicState(&dynamic_state)
+            .setStages(shader_result.pipelineStages)
+            .setPVertexInputState(&vertex_layout)
+            .setPInputAssemblyState(&input_assembly)
+            .setPViewportState(&viewport_state)
+            .setPRasterizationState(&rasterizer_state)
+            .setPMultisampleState(&multisampling_state)
+            .setPColorBlendState(&blend_state)
+            .setLayout(this->pipelineLayout)
+            .setRenderPass(nullptr),
+        vk::PipelineRenderingCreateInfo()
+            .setColorAttachmentFormats(this->swapChainSurfaceFormat.format)
+    };
+    
+    this->renderPipeline = vk::raii::Pipeline(device, nullptr, 
+        pipeline_create_chain.get<vk::GraphicsPipelineCreateInfo>());
+
+    ChopinLogger::l("Created Render Pipeline");
 }

@@ -13,6 +13,9 @@
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <stdexcept>
+#include <vulkan/vulkan_raii.hpp>
+#include <memory>
+#include <spirv-reflect/spirv_reflect.h>
 
 namespace ColorUtils {
     
@@ -39,6 +42,7 @@ namespace Mth {
 
 namespace FileUtils {
     std::string readFileToString(const std::string& filename);
+    std::vector<char> readFileAsByte(const std::string& filename);
 }
 
 namespace ChopinLogger {
@@ -219,6 +223,62 @@ namespace GLFWUtil {
         return std::views::counted(glfw_required_ptr, gflw_required_count);
     }
 
+}
+
+namespace SpirvReflectUtil {
+    class RaiiShaderModule {
+    public:
+        inline RaiiShaderModule(const std::vector<uint32_t>& buffer) {
+            SpvReflectResult result = spvReflectCreateShaderModule(
+                buffer.size() * sizeof(uint32_t), 
+                buffer.data(), 
+                &(this->shaderModule)
+            );
+
+            if (result != SPV_REFLECT_RESULT_SUCCESS)
+                throw std::runtime_error("Failed to parse SPIR-V for reflection.");
+        }
+        inline ~RaiiShaderModule() {
+            spvReflectDestroyShaderModule(&(this->shaderModule));
+        }
+
+        inline const SpvReflectShaderModule& get() const { return this->shaderModule; }
+
+        RaiiShaderModule(const RaiiShaderModule&) = delete;
+        RaiiShaderModule& operator=(const RaiiShaderModule&) = delete;
+    
+        // I am too lazy to write the move semmatic lol
+        RaiiShaderModule(RaiiShaderModule&& other) = delete;
+        RaiiShaderModule& operator=(RaiiShaderModule&& other) = delete;
+    private:
+        SpvReflectShaderModule shaderModule{};
+    };
+
+    struct SpvEntryPoint {
+        vk::ShaderStageFlagBits stage;
+        std::string name;
+    };
+    auto reflectEntryPointsFromBuf(const std::vector<uint32_t>& buffer) -> std::vector<SpvEntryPoint>;
+}
+
+namespace SpirvUtil {
+    auto readFromFile(const std::string& filename) -> std::vector<uint32_t>;
+    
+    struct SpvWithReflect {
+        std::vector<uint32_t> buffer;
+        std::vector<SpirvReflectUtil::SpvEntryPoint> entryPoints;
+    };
+    auto readfromFileWithReflect(const std::string& filename) -> SpvWithReflect;
+
+
+    struct SpvShaderModuleAndStage {
+        std::vector<std::unique_ptr<std::string>> stringPool;
+        vk::raii::ShaderModule shaderModule = nullptr;
+        std::vector<vk::PipelineShaderStageCreateInfo> pipelineStages;
+    };
+    [[nodiscard]]
+    auto shaderModuleAndStagesFromFile(
+        const vk::raii::Device& device, const std::string& filename) -> SpvShaderModuleAndStage;
 }
 
 #endif

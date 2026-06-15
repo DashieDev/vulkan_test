@@ -30,6 +30,9 @@ private:
     std::vector<vk::Image> swapChainImages;
     std::vector<vk::raii::ImageView> swapChainImageViews;
 
+    vk::raii::PipelineLayout pipelineLayout = nullptr;
+    vk::raii::Pipeline renderPipeline = nullptr;
+
     void initInstance();
     void initDebugMsgr();
     void initSurface();

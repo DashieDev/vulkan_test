@@ -11,6 +11,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <spirv-reflect/spirv_reflect.h>
+#include <vulkan/vulkan_raii.hpp>
+#include <format>
 
 std::array<float, 3> ColorUtils::RGB::toArray(int color) {
     int r = (color >> 16) & 255;
@@ -62,7 +65,19 @@ std::string FileUtils::readFileToString(const std::string& filename) {
     return ret;
 }
 
+std::vector<char> FileUtils::readFileAsByte(const std::string& filename) {
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
+    if (!file.is_open())
+        throw std::runtime_error("failed to open file : " + filename);
+
+    std::vector<char> buffer(file.tellg());
+
+    file.seekg(0, std::ios::beg);
+    file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+
+    return buffer;
+}
 
 void ChopinLogger::l(const std::string& msg) {
     std::cout << msg << std::endl;
@@ -84,4 +99,97 @@ auto ListUtil::unwrapCStr(std::vector<std::string_view> target) -> std::vector<c
     return target 
         | std::views::transform([](const auto& sv) { return sv.data(); })
         | RangesUtil::toList();     
+}
+
+auto SpirvUtil::readFromFile(const std::string& filename) -> std::vector<uint32_t> {
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+    if (!file.is_open())
+        throw std::runtime_error("failed to open file: " + filename);
+
+    size_t file_size_bytes = static_cast<size_t>(file.tellg());
+    size_t buffer_size = file_size_bytes / sizeof(uint32_t);
+    size_t remainder_bytes = file_size_bytes % sizeof(uint32_t); 
+
+    if (remainder_bytes != 0)
+        throw std::runtime_error("Trying to read corrupted SPIR-V file (size is not a multiple of 4): " + filename);
+
+    std::vector<uint32_t> buffer(buffer_size);
+
+    file.seekg(0, std::ios::beg);
+    if (!file.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(file_size_bytes)))
+        throw std::runtime_error("Failed to read the entire SPIR-V file: " + filename);;
+
+    return buffer;
+}
+
+auto SpirvReflectUtil::reflectEntryPointsFromBuf(const std::vector<uint32_t>& buffer) 
+    -> std::vector<SpirvReflectUtil::SpvEntryPoint> {
+
+    SpirvReflectUtil::RaiiShaderModule reflect_module_raii(buffer);
+    const auto& reflect_module = reflect_module_raii.get();
+
+    uint32_t entry_count = reflect_module.entry_point_count;
+    
+    std::vector<SpirvReflectUtil::SpvEntryPoint> ret;
+    ret.reserve(entry_count);
+
+    for (uint32_t i = 0; i < entry_count; ++i) {
+        const auto& entry_point = reflect_module.entry_points[i];
+
+        ret.emplace_back(
+            static_cast<vk::ShaderStageFlagBits>(entry_point.shader_stage),
+            entry_point.name
+        );
+    }
+    return ret;
+}
+
+auto SpirvUtil::readfromFileWithReflect(const std::string& filename) 
+    -> SpirvUtil::SpvWithReflect {
+
+    SpirvUtil::SpvWithReflect ret;
+
+    ret.buffer = SpirvUtil::readFromFile(filename);
+    std::vector<SpirvReflectUtil::SpvEntryPoint> entry_points;
+    try {
+        ret.entryPoints = SpirvReflectUtil::reflectEntryPointsFromBuf(ret.buffer);
+    } catch (const std::exception& e) {
+        throw std::runtime_error(std::format(
+            "Exception thrown when reflecting SPV file [ {} ]: {}",
+            filename, e.what()
+        ));
+    }
+
+    return ret;
+}
+
+[[nodiscard]]
+auto SpirvUtil::shaderModuleAndStagesFromFile(
+    const vk::raii::Device& device, const std::string& filename) 
+    -> SpirvUtil::SpvShaderModuleAndStage {
+
+    SpirvUtil::SpvShaderModuleAndStage ret;
+
+    auto read_result = SpirvUtil::readfromFileWithReflect(filename);
+    ret.shaderModule = vk::raii::ShaderModule(
+        device, 
+        vk::ShaderModuleCreateInfo().setCode(read_result.buffer)
+    );
+
+    ret.stringPool.reserve(read_result.entryPoints.size());
+    ret.pipelineStages.reserve(read_result.entryPoints.size());
+    for (auto& entry : read_result.entryPoints) {
+        ret.stringPool.push_back(std::make_unique<std::string>(std::move(entry.name)));
+        
+        const auto& name = *(ret.stringPool.back());
+        ret.pipelineStages.push_back(
+            vk::PipelineShaderStageCreateInfo()
+                .setModule(ret.shaderModule)
+                .setStage(entry.stage)
+                .setPName(name.c_str())
+        );
+    }
+    
+    return ret;
 }
