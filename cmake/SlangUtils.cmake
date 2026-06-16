@@ -25,23 +25,19 @@ function(target_compile_slang_shaders target_name)
                 -profile spirv_1_4 
                 -fvk-use-entrypoint-name 
                 -o "${spv_output}"
-            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${input_shader}"
-            COMMENT "Compiling Slang shader: ${input_shader} -> ${spv_output}"
-            VERBATIM
-        )
-
-        list(APPEND spv_outputs "${spv_output}")
-
-        add_custom_command(
-            TARGET ${target_name} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory 
                 "$<TARGET_FILE_DIR:${target_name}>/${shader_dir}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${spv_output}"
                 "$<TARGET_FILE_DIR:${target_name}>/${shader_dir}/"
-            COMMENT "Copying Compiled Shader ${shader_name}.spv to target directory ${shader_dir}/..."
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${input_shader}"
+            COMMENT "Compiling and copying Slang shader: ${input_shader} -> ${shader_dir}/"
             VERBATIM
         )
+
+        list(APPEND spv_outputs "${spv_output}")
+
+        target_sources(${target_name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/${input_shader}")
     endforeach()
 
     add_custom_target(${target_name}_SlangShaders DEPENDS ${spv_outputs})
