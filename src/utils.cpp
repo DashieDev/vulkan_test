@@ -166,8 +166,10 @@ auto SpirvUtil::readfromFileWithReflect(const std::string& filename)
 
 [[nodiscard]]
 auto SpirvUtil::shaderModuleAndStagesFromFile(
-    const vk::raii::Device& device, const std::string& filename) 
-    -> SpirvUtil::SpvShaderModuleAndStage {
+        const vk::raii::Device& device, 
+        const std::string& filename,
+        vk::ShaderStageFlags requiredStages
+    ) -> SpirvUtil::SpvShaderModuleAndStage {
 
     SpirvUtil::SpvShaderModuleAndStage ret;
 
@@ -177,9 +179,13 @@ auto SpirvUtil::shaderModuleAndStagesFromFile(
         vk::ShaderModuleCreateInfo().setCode(read_result.buffer)
     );
 
+    vk::ShaderStageFlags found_stages;
+
     ret.stringPool.reserve(read_result.entryPoints.size());
     ret.pipelineStages.reserve(read_result.entryPoints.size());
     for (auto& entry : read_result.entryPoints) {
+        found_stages |= entry.stage;
+
         ret.stringPool.push_back(std::make_unique<std::string>(std::move(entry.name)));
         
         const auto& name = *(ret.stringPool.back());
@@ -189,6 +195,18 @@ auto SpirvUtil::shaderModuleAndStagesFromFile(
                 .setStage(entry.stage)
                 .setPName(name.c_str())
         );
+    }
+
+    const bool has_required_stages =
+        (found_stages & requiredStages) == requiredStages; 
+
+    if (!has_required_stages) {
+        auto missing_stages = vk::ShaderStageFlags(requiredStages & ~found_stages);
+        
+        throw std::runtime_error(std::format(
+            "SPIR-V file [ {} ] is missing required shader stages: {}",
+            filename, vk::to_string(missing_stages)
+        ));
     }
     
     return ret;

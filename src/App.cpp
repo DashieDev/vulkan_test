@@ -407,8 +407,13 @@ void VulkanContext::createImageViews() {
 
 void VulkanContext::setupRenderPipeline() {
     
+    using VkShaderStages = vk::ShaderStageFlagBits;
+
     const std::string shader_path = "shaders/shader.spv";
-    auto shader_result = SpirvUtil::shaderModuleAndStagesFromFile(this->device, shader_path);
+    auto shader_result = SpirvUtil::shaderModuleAndStagesFromFile(
+        this->device, shader_path,
+        VkShaderStages::eVertex | VkShaderStages::eFragment
+    );
 
     ChopinLogger::l(std::format("Loaded SPIR-V Binary from : {}", shader_path));
     for (const auto& entry : shader_result.pipelineStages) {

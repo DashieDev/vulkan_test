@@ -278,7 +278,10 @@ namespace SpirvUtil {
     };
     [[nodiscard]]
     auto shaderModuleAndStagesFromFile(
-        const vk::raii::Device& device, const std::string& filename) -> SpvShaderModuleAndStage;
+        const vk::raii::Device& device, 
+        const std::string& filename,
+        vk::ShaderStageFlags requiredStages = {}
+    ) -> SpvShaderModuleAndStage;
 }
 
 #endif
