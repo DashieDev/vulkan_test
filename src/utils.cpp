@@ -173,17 +173,17 @@ auto SpirvUtil::shaderModuleAndStagesFromFile(
 
     SpirvUtil::SpvShaderModuleAndStage ret;
 
-    auto read_result = SpirvUtil::readfromFileWithReflect(filename);
+    auto [code_bytes, entry_points] = SpirvUtil::readfromFileWithReflect(filename);
     ret.shaderModule = vk::raii::ShaderModule(
         device, 
-        vk::ShaderModuleCreateInfo().setCode(read_result.buffer)
+        vk::ShaderModuleCreateInfo().setCode(code_bytes)
     );
 
     vk::ShaderStageFlags found_stages;
 
-    ret.stringPool.reserve(read_result.entryPoints.size());
-    ret.pipelineStages.reserve(read_result.entryPoints.size());
-    for (auto& entry : read_result.entryPoints) {
+    ret.stringPool.reserve(entry_points.size());
+    ret.pipelineStages.reserve(entry_points.size());
+    for (auto& entry : entry_points) {
         found_stages |= entry.stage;
 
         ret.stringPool.push_back(std::make_unique<std::string>(std::move(entry.name)));
@@ -210,4 +210,15 @@ auto SpirvUtil::shaderModuleAndStagesFromFile(
     }
     
     return ret;
+}
+
+auto VkUtil::waitFenceAndReset(
+    const vk::raii::Device& device,
+    const vk::raii::Fence& fence,
+    uint64_t timeout = UINT64_MAX
+) -> void {
+    auto result = device.waitForFences(*fence, true, timeout);
+    if (result != vk::Result::eSuccess)
+        throw std::runtime_error("failed to wait for fence!");
+    device.resetFences(*fence);
 }
