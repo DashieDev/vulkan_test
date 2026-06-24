@@ -12,7 +12,12 @@ public:
         this->createSwapChain();
         this->createImageViews();
         this->setupRenderPipeline();
+        this->createCommandPool();
+        this->createCommandBuffer();
+        this->createAsyncHelper();
     };
+
+    void renderFrame();
 private:
     vk::raii::Context vkContext;
     vk::raii::Instance vkInstance{nullptr};
@@ -23,6 +28,7 @@ private:
     vk::PhysicalDeviceFeatures deviceFeatures;
     vk::raii::Device device = nullptr;
     vk::raii::Queue queue = nullptr;
+    uint32_t queueFamilyIndex; 
 
     vk::raii::SwapchainKHR swapChain = nullptr;
     vk::SurfaceFormatKHR swapChainSurfaceFormat;
@@ -33,6 +39,13 @@ private:
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline renderPipeline = nullptr;
 
+    vk::raii::CommandPool commandPool = nullptr;
+    vk::raii::CommandBuffer commandBuffer = nullptr;
+
+    vk::raii::Semaphore whenImageAccquired = nullptr;
+    vk::raii::Semaphore whenRenderedToImage = nullptr;
+    vk::raii::Fence whenPrevFrameFinished = nullptr;
+
     void initInstance();
     void initDebugMsgr();
     void initSurface();
@@ -41,6 +54,38 @@ private:
     void createSwapChain();
     void createImageViews();
     void setupRenderPipeline();
+    void createCommandPool();
+    void createCommandBuffer();
+    void createAsyncHelper();
+
+    void recordCommandBuffer(uint32_t imageIndex);
+    inline void transitionImageLayout(
+        uint32_t imageIndx,
+        vk::ImageLayout fromLayout, vk::ImageLayout toLayout,
+        vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask,
+        vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask
+    ) {
+        
+        auto barrier = vk::ImageMemoryBarrier2()
+            .setSrcStageMask(srcStageMask).setDstStageMask(dstStageMask)
+            .setSrcAccessMask(srcAccessMask).setDstAccessMask(dstAccessMask)
+            .setOldLayout(fromLayout).setNewLayout(toLayout)
+            .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+            .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+            .setImage(this->swapChainImages[imageIndx])
+            .setSubresourceRange(
+                vk::ImageSubresourceRange()
+                    .setAspectMask(vk::ImageAspectFlagBits::eColor)
+                    .setBaseMipLevel(0)
+                    .setLevelCount(1)
+                    .setBaseArrayLayer(0)
+                    .setLayerCount(1)
+            );
+        auto dependency_args = vk::DependencyInfo()
+            .setDependencyFlags({})
+            .setImageMemoryBarriers(barrier);
+        this->commandBuffer.pipelineBarrier2(dependency_args);
+    }
 };
 
 class App {

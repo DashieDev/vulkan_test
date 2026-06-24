@@ -284,4 +284,13 @@ namespace SpirvUtil {
     ) -> SpvShaderModuleAndStage;
 }
 
+
+namespace VkUtil {
+    auto waitFenceAndReset(
+        const vk::raii::Device& device, 
+        const vk::raii::Fence& fence,
+        uint64_t timeout = UINT64_MAX
+    ) -> void;
+}
+
 #endif

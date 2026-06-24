@@ -215,7 +215,7 @@ auto SpirvUtil::shaderModuleAndStagesFromFile(
 auto VkUtil::waitFenceAndReset(
     const vk::raii::Device& device,
     const vk::raii::Fence& fence,
-    uint64_t timeout = UINT64_MAX
+    uint64_t timeout
 ) -> void {
     auto result = device.waitForFences(*fence, true, timeout);
     if (result != vk::Result::eSuccess)

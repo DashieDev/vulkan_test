@@ -51,6 +51,7 @@ void App::mainLoop() {
     while (!glfwWindowShouldClose(this->window)) {
         processWindowInput();
         glfwPollEvents();
+        this->vulkanContext.renderFrame();
     }
 }
 
@@ -268,7 +269,8 @@ void VulkanContext::createLogicalDevice() {
         vk::PhysicalDeviceVulkan11Features()
             .setShaderDrawParameters(true),
         vk::PhysicalDeviceVulkan13Features()
-            .setDynamicRendering(true),
+            .setDynamicRendering(true)
+            .setSynchronization2(true),
         vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT()
             .setExtendedDynamicState(true)
     };
@@ -284,6 +286,7 @@ void VulkanContext::createLogicalDevice() {
 
     this->device = vk::raii::Device(this->physicalDevice, device_create_args);
     this->queue = vk::raii::Queue(this->device, queue_family_index, 0);
+    this->queueFamilyIndex = queue_family_index;
 }
 
 
@@ -436,15 +439,6 @@ void VulkanContext::setupRenderPipeline() {
     auto input_assembly = vk::PipelineInputAssemblyStateCreateInfo()
         .setTopology(vk::PrimitiveTopology::eTriangleList);
 
-    // auto viewport = vk::Viewport()
-    //     .setX(0.f).setY(0.f)
-    //     .setWidth(this->swapChainExtent.width)
-    //     .setHeight(this->swapChainExtent.height)
-    //     .setMinDepth(0.f).setMaxDepth(1.f);
-    
-    // auto scrissor = vk::Rect2D()
-    //     .setOffset({0, 0}).setExtent(this->swapChainExtent);
-
     auto viewport_state = vk::PipelineViewportStateCreateInfo()
         .setViewportCount(1).setScissorCount(1);
 
@@ -475,7 +469,8 @@ void VulkanContext::setupRenderPipeline() {
                 | vk::ColorComponentFlagBits::eG 
                 | vk::ColorComponentFlagBits::eB 
                 | vk::ColorComponentFlagBits::eA
-    )};
+            )
+    };
 
     auto blend_state = vk::PipelineColorBlendStateCreateInfo()
         .setLogicOpEnable(vk::False)
@@ -504,8 +499,131 @@ void VulkanContext::setupRenderPipeline() {
             .setColorAttachmentFormats(this->swapChainSurfaceFormat.format)
     };
     
-    this->renderPipeline = vk::raii::Pipeline(device, nullptr, 
+    this->renderPipeline = vk::raii::Pipeline(this->device, nullptr, 
         pipeline_create_chain.get<vk::GraphicsPipelineCreateInfo>());
 
     ChopinLogger::l("Created Render Pipeline");
+}
+
+void VulkanContext::createCommandPool() {
+    auto pool_args = vk::CommandPoolCreateInfo()
+        .setFlags(vk::CommandPoolCreateFlagBits::eResetCommandBuffer)
+        .setQueueFamilyIndex(this->queueFamilyIndex);
+
+    this->commandPool = vk::raii::CommandPool(this->device, pool_args);
+}
+
+void VulkanContext::createCommandBuffer() {
+    auto alloc_args = vk::CommandBufferAllocateInfo()
+        .setCommandPool(this->commandPool)
+        .setLevel(vk::CommandBufferLevel::ePrimary)
+        .setCommandBufferCount(1);
+    
+    this->commandBuffer = 
+        std::move(vk::raii::CommandBuffers(this->device, alloc_args).front());
+}
+
+void VulkanContext::recordCommandBuffer(uint32_t imageIndex) {
+    this->commandBuffer.begin({});
+
+    this->transitionImageLayout(
+        imageIndex,
+        
+        vk::ImageLayout::eUndefined, 
+        vk::ImageLayout::eColorAttachmentOptimal,
+        
+        {}, 
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput
+    );
+
+    auto clear_color = vk::ClearColorValue(0.f, 0.f, 0.f, 1.f);
+    auto attachment_info = vk::RenderingAttachmentInfo()
+        .setImageView(this->swapChainImageViews[imageIndex])
+        .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
+        .setLoadOp(vk::AttachmentLoadOp::eClear)
+        .setStoreOp(vk::AttachmentStoreOp::eStore)
+        .setClearValue(clear_color);
+
+    auto rendering_info = vk::RenderingInfo()
+        .setRenderArea(vk::Rect2D({0, 0}, this->swapChainExtent))
+        .setLayerCount(1)
+        .setColorAttachments(attachment_info);
+
+
+    //Rendering
+    this->commandBuffer.beginRendering(rendering_info);
+
+    this->commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, this->renderPipeline);
+    
+    auto viewport = vk::Viewport()
+        .setX(0.f).setY(0.f)
+        .setWidth(this->swapChainExtent.width)
+        .setHeight(this->swapChainExtent.height)
+        .setMinDepth(0.f).setMaxDepth(1.f);
+    
+    auto scrissor = vk::Rect2D()
+        .setOffset({0, 0}).setExtent(this->swapChainExtent);
+
+    this->commandBuffer.setViewport(0, viewport);
+    this->commandBuffer.setScissor(0, scrissor);
+
+    this->commandBuffer.draw(3, 1, 0, 0);
+
+    this->commandBuffer.endRendering();
+    //End Rendering
+
+    this->transitionImageLayout(
+        imageIndex,
+
+        vk::ImageLayout::eColorAttachmentOptimal,
+        vk::ImageLayout::ePresentSrcKHR,
+
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        {},
+
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::PipelineStageFlagBits2::eBottomOfPipe
+    );
+
+    commandBuffer.end();
+}
+
+void VulkanContext::createAsyncHelper() {
+    this->whenImageAccquired = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
+    this->whenRenderedToImage = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
+    this->whenPrevFrameFinished = vk::raii::Fence(this->device, 
+        vk::FenceCreateInfo()
+            .setFlags(vk::FenceCreateFlagBits::eSignaled)
+    );
+
+}
+
+void VulkanContext::renderFrame() {
+    
+    VkUtil::waitFenceAndReset(this->device, this->whenPrevFrameFinished);
+
+    auto [r1, image_index] = swapChain.acquireNextImage(UINT64_MAX, *(this->whenImageAccquired), nullptr);
+
+    this->recordCommandBuffer(image_index);
+
+    auto wait_dst_stage_mask = vk::PipelineStageFlags(
+        vk::PipelineStageFlagBits::eColorAttachmentOutput);
+    auto submit_args = vk::SubmitInfo()
+        .setWaitSemaphores(*(this->whenImageAccquired))
+        .setWaitDstStageMask(wait_dst_stage_mask)
+        .setCommandBuffers(*(this->commandBuffer))
+        .setSignalSemaphores(*(this->whenRenderedToImage));
+
+    this->queue.submit(submit_args, *(this->whenPrevFrameFinished));
+
+    
+    auto present_args = vk::PresentInfoKHR()
+        .setWaitSemaphores(*(this->whenRenderedToImage))
+        .setSwapchains(*(this->swapChain))
+        .setImageIndices(image_index);
+
+    auto present_result = this->queue.presentKHR(present_args);
 }
