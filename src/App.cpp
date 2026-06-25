@@ -384,7 +384,16 @@ void VulkanContext::createSwapChain() {
 
     this->swapChain = vk::raii::SwapchainKHR(this->device, swap_chain_create_args);
     this->swapChainImages = this->swapChain.getImages();
-    ChopinLogger::l("Accquired swap chain with " + std::to_string(this->swapChainImages.size()) + " images");
+    ChopinLogger::l("Accquired swap chain with:");
+    ChopinLogger::l(std::format("Swap Extent : {} x {}", 
+        this->swapChainExtent.width, this->swapChainExtent.height));
+    ChopinLogger::l(std::format("Min Images Count : {}", min_image_count));
+    ChopinLogger::l(std::format("Format - Color Space : {}", vk::to_string(this->swapChainSurfaceFormat.colorSpace)));
+    ChopinLogger::l(std::format("Format - Format : {}", vk::to_string(this->swapChainSurfaceFormat.format)));
+    ChopinLogger::l(std::format("Present Mode : {}", vk::to_string(present_mode)));
+    ChopinLogger::l(std::format("Images Count : {}", this->swapChainImages.size()));
+
+    ChopinLogger::l("========");
 }
 
 void VulkanContext::createImageViews() {
@@ -594,7 +603,7 @@ void VulkanContext::recordCommandBuffer(uint32_t imageIndex) {
 void VulkanContext::createAsyncHelper() {
     this->whenImageAccquired = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
     this->whenRenderedToImage = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
-    this->whenPrevFrameFinished = vk::raii::Fence(this->device, 
+    this->whenRenderedToImageJoin = vk::raii::Fence(this->device, 
         vk::FenceCreateInfo()
             .setFlags(vk::FenceCreateFlagBits::eSignaled)
     );
@@ -603,7 +612,7 @@ void VulkanContext::createAsyncHelper() {
 
 void VulkanContext::renderFrame() {
     
-    VkUtil::waitFenceAndReset(this->device, this->whenPrevFrameFinished);
+    VkUtil::waitFenceAndReset(this->device, this->whenRenderedToImageJoin);
 
     auto [r1, image_index] = swapChain.acquireNextImage(UINT64_MAX, *(this->whenImageAccquired), nullptr);
 
@@ -617,7 +626,7 @@ void VulkanContext::renderFrame() {
         .setCommandBuffers(*(this->commandBuffer))
         .setSignalSemaphores(*(this->whenRenderedToImage));
 
-    this->queue.submit(submit_args, *(this->whenPrevFrameFinished));
+    this->queue.submit(submit_args, *(this->whenRenderedToImageJoin));
 
     
     auto present_args = vk::PresentInfoKHR()

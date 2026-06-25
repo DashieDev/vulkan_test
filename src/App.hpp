@@ -44,7 +44,7 @@ private:
 
     vk::raii::Semaphore whenImageAccquired = nullptr;
     vk::raii::Semaphore whenRenderedToImage = nullptr;
-    vk::raii::Fence whenPrevFrameFinished = nullptr;
+    vk::raii::Fence whenRenderedToImageJoin = nullptr;
 
     void initInstance();
     void initDebugMsgr();
