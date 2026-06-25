@@ -602,17 +602,21 @@ void VulkanContext::recordCommandBuffer(uint32_t imageIndex) {
 
 void VulkanContext::createAsyncHelper() {
     this->whenImageAccquired = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
-    this->whenRenderedToImage = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
-    this->whenRenderedToImageJoin = vk::raii::Fence(this->device, 
+    ListUtil::initWithFactory(this->whenRenderedToImage,
+        this->swapChainImages.size(),
+        [&]() {
+            return vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
+        } 
+    );
+    this->whenRenderedToFrameJoin = vk::raii::Fence(this->device, 
         vk::FenceCreateInfo()
             .setFlags(vk::FenceCreateFlagBits::eSignaled)
     );
-
 }
 
 void VulkanContext::renderFrame() {
     
-    VkUtil::waitFenceAndReset(this->device, this->whenRenderedToImageJoin);
+    VkUtil::waitFenceAndReset(this->device, this->whenRenderedToFrameJoin);
 
     auto [r1, image_index] = swapChain.acquireNextImage(UINT64_MAX, *(this->whenImageAccquired), nullptr);
 
@@ -624,13 +628,13 @@ void VulkanContext::renderFrame() {
         .setWaitSemaphores(*(this->whenImageAccquired))
         .setWaitDstStageMask(wait_dst_stage_mask)
         .setCommandBuffers(*(this->commandBuffer))
-        .setSignalSemaphores(*(this->whenRenderedToImage));
+        .setSignalSemaphores(*(this->whenRenderedToImage[image_index]));
 
-    this->queue.submit(submit_args, *(this->whenRenderedToImageJoin));
+    this->queue.submit(submit_args, *(this->whenRenderedToFrameJoin));
 
     
     auto present_args = vk::PresentInfoKHR()
-        .setWaitSemaphores(*(this->whenRenderedToImage))
+        .setWaitSemaphores(*(this->whenRenderedToImage[image_index]))
         .setSwapchains(*(this->swapChain))
         .setImageIndices(image_index);
 

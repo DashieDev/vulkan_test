@@ -212,6 +212,14 @@ namespace ListUtil {
 
     auto unwrapCStr(std::vector<std::string_view> target) -> std::vector<const char*>;
 
+    template <typename T, typename Factory>
+    auto initWithFactory(std::vector<T>& list, size_t count, Factory&& factory) -> void {
+        if (!list.empty())
+            throw std::runtime_error("Trying to initialize a non-empty list");
+        list.reserve(count); 
+        std::ranges::generate_n(std::back_inserter(list), count, factory);
+    }
+
 }
 
 namespace GLFWUtil {

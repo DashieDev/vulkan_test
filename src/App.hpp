@@ -43,8 +43,9 @@ private:
     vk::raii::CommandBuffer commandBuffer = nullptr;
 
     vk::raii::Semaphore whenImageAccquired = nullptr;
-    vk::raii::Semaphore whenRenderedToImage = nullptr;
-    vk::raii::Fence whenRenderedToImageJoin = nullptr;
+    std::vector<vk::raii::Semaphore> whenRenderedToImage;
+
+    vk::raii::Fence whenRenderedToFrameJoin = nullptr;
 
     void initInstance();
     void initDebugMsgr();
