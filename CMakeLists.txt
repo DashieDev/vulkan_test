@@ -10,6 +10,8 @@ add_executable(VulkanTest1
     "src/App.cpp"
     "src/utils.hpp"
     "src/utils.cpp"
+    "src/vkutils.hpp"
+    "src/vkutils.cpp"
 )
 
 set_target_properties(VulkanTest1 PROPERTIES 

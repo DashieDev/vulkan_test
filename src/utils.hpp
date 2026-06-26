@@ -292,20 +292,4 @@ namespace SpirvUtil {
     ) -> SpvShaderModuleAndStage;
 }
 
-
-namespace VkUtil {
-    struct RenderingFrame {
-        // I don't think I need to explicitly disable copy here since we have move-only members
-        vk::raii::CommandBuffer commands = nullptr;
-        vk::raii::Semaphore whenImageAccquired = nullptr;
-        vk::raii::Fence whenRenderedToFrameJoin = nullptr;
-    };
-
-    auto waitFenceAndReset(
-        const vk::raii::Device& device, 
-        const vk::raii::Fence& fence,
-        uint64_t timeout = UINT64_MAX
-    ) -> void;
-}
-
 #endif
