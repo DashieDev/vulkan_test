@@ -1,4 +1,7 @@
+#pragma once
+
 #include <vulkan/vulkan_raii.hpp>
+#include <cstdint>
 
 namespace VkUtil {
     struct RenderingFrame {
