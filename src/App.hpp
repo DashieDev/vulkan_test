@@ -1,5 +1,7 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan_raii.hpp>
+#include "utils.hpp"
+
 
 class VulkanContext {
 public:
@@ -13,11 +15,11 @@ public:
         this->createImageViews();
         this->setupRenderPipeline();
         this->createCommandPool();
-        this->createCommandBuffer();
-        this->createAsyncHelper();
+        this->setupRenderingFramesAndImages();
     };
 
     void renderFrame();
+    void onShutdown();
 private:
     vk::raii::Context vkContext;
     vk::raii::Instance vkInstance{nullptr};
@@ -40,12 +42,12 @@ private:
     vk::raii::Pipeline renderPipeline = nullptr;
 
     vk::raii::CommandPool commandPool = nullptr;
-    vk::raii::CommandBuffer commandBuffer = nullptr;
-
-    vk::raii::Semaphore whenImageAccquired = nullptr;
     std::vector<vk::raii::Semaphore> whenRenderedToImage;
 
-    vk::raii::Fence whenRenderedToFrameJoin = nullptr;
+    uint32_t currentRenderingFrame = 0;
+    std::vector<VkUtil::RenderingFrame> renderingFrames;
+
+    static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
     void initInstance();
     void initDebugMsgr();
@@ -56,12 +58,11 @@ private:
     void createImageViews();
     void setupRenderPipeline();
     void createCommandPool();
-    void createCommandBuffer();
-    void createAsyncHelper();
+    void setupRenderingFramesAndImages();
 
-    void recordCommandBuffer(uint32_t imageIndex);
+    void recordCommandBuffer(const VkUtil::RenderingFrame& frame, uint32_t imageIndex);
     inline void transitionImageLayout(
-        uint32_t imageIndx,
+        const VkUtil::RenderingFrame& frame, uint32_t imageIndx,
         vk::ImageLayout fromLayout, vk::ImageLayout toLayout,
         vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask,
         vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask
@@ -85,8 +86,9 @@ private:
         auto dependency_args = vk::DependencyInfo()
             .setDependencyFlags({})
             .setImageMemoryBarriers(barrier);
-        this->commandBuffer.pipelineBarrier2(dependency_args);
+        frame.commands.pipelineBarrier2(dependency_args);
     }
+
 };
 
 class App {

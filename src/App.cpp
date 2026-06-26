@@ -53,6 +53,7 @@ void App::mainLoop() {
         glfwPollEvents();
         this->vulkanContext.renderFrame();
     }
+    this->vulkanContext.onShutdown();
 }
 
 void App::processWindowInput() {
@@ -522,21 +523,41 @@ void VulkanContext::createCommandPool() {
     this->commandPool = vk::raii::CommandPool(this->device, pool_args);
 }
 
-void VulkanContext::createCommandBuffer() {
+void VulkanContext::setupRenderingFramesAndImages() {
+    this->renderingFrames.reserve(VulkanContext::MAX_FRAMES_IN_FLIGHT);
+
     auto alloc_args = vk::CommandBufferAllocateInfo()
         .setCommandPool(this->commandPool)
         .setLevel(vk::CommandBufferLevel::ePrimary)
-        .setCommandBufferCount(1);
+        .setCommandBufferCount(VulkanContext::MAX_FRAMES_IN_FLIGHT);
     
-    this->commandBuffer = 
-        std::move(vk::raii::CommandBuffers(this->device, alloc_args).front());
+    auto command_buffers = vk::raii::CommandBuffers(this->device, alloc_args);
+    
+    for (int i = 0; i < VulkanContext::MAX_FRAMES_IN_FLIGHT; ++i) {
+        this->renderingFrames.emplace_back(
+            std::move(command_buffers[i]),
+            vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo()),
+            vk::raii::Fence(this->device, 
+                vk::FenceCreateInfo()
+                    .setFlags(vk::FenceCreateFlagBits::eSignaled)
+            )
+        );
+    }
+
+
+    ListUtil::initWithFactory(this->whenRenderedToImage,
+        this->swapChainImages.size(),
+        [&]() {
+            return vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
+        } 
+    );
 }
 
-void VulkanContext::recordCommandBuffer(uint32_t imageIndex) {
-    this->commandBuffer.begin({});
+void VulkanContext::recordCommandBuffer(const VkUtil::RenderingFrame& frame, uint32_t imageIndex) {
+    frame.commands.begin({});
 
     this->transitionImageLayout(
-        imageIndex,
+        frame, imageIndex,
         
         vk::ImageLayout::eUndefined, 
         vk::ImageLayout::eColorAttachmentOptimal,
@@ -563,9 +584,9 @@ void VulkanContext::recordCommandBuffer(uint32_t imageIndex) {
 
 
     //Rendering
-    this->commandBuffer.beginRendering(rendering_info);
+    frame.commands.beginRendering(rendering_info);
 
-    this->commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, this->renderPipeline);
+    frame.commands.bindPipeline(vk::PipelineBindPoint::eGraphics, this->renderPipeline);
     
     auto viewport = vk::Viewport()
         .setX(0.f).setY(0.f)
@@ -576,16 +597,16 @@ void VulkanContext::recordCommandBuffer(uint32_t imageIndex) {
     auto scrissor = vk::Rect2D()
         .setOffset({0, 0}).setExtent(this->swapChainExtent);
 
-    this->commandBuffer.setViewport(0, viewport);
-    this->commandBuffer.setScissor(0, scrissor);
+    frame.commands.setViewport(0, viewport);
+    frame.commands.setScissor(0, scrissor);
 
-    this->commandBuffer.draw(3, 1, 0, 0);
+    frame.commands.draw(3, 1, 0, 0);
 
-    this->commandBuffer.endRendering();
+    frame.commands.endRendering();
     //End Rendering
 
     this->transitionImageLayout(
-        imageIndex,
+        frame, imageIndex,
 
         vk::ImageLayout::eColorAttachmentOptimal,
         vk::ImageLayout::ePresentSrcKHR,
@@ -597,40 +618,28 @@ void VulkanContext::recordCommandBuffer(uint32_t imageIndex) {
         vk::PipelineStageFlagBits2::eBottomOfPipe
     );
 
-    commandBuffer.end();
-}
-
-void VulkanContext::createAsyncHelper() {
-    this->whenImageAccquired = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
-    ListUtil::initWithFactory(this->whenRenderedToImage,
-        this->swapChainImages.size(),
-        [&]() {
-            return vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
-        } 
-    );
-    this->whenRenderedToFrameJoin = vk::raii::Fence(this->device, 
-        vk::FenceCreateInfo()
-            .setFlags(vk::FenceCreateFlagBits::eSignaled)
-    );
+    frame.commands.end();
 }
 
 void VulkanContext::renderFrame() {
     
-    VkUtil::waitFenceAndReset(this->device, this->whenRenderedToFrameJoin);
+    const auto& frame = this->renderingFrames[this->currentRenderingFrame];
 
-    auto [r1, image_index] = swapChain.acquireNextImage(UINT64_MAX, *(this->whenImageAccquired), nullptr);
+    VkUtil::waitFenceAndReset(this->device, frame.whenRenderedToFrameJoin);
 
-    this->recordCommandBuffer(image_index);
+    auto [r1, image_index] = swapChain.acquireNextImage(UINT64_MAX, *(frame.whenImageAccquired), nullptr);
+
+    this->recordCommandBuffer(frame, image_index);
 
     auto wait_dst_stage_mask = vk::PipelineStageFlags(
         vk::PipelineStageFlagBits::eColorAttachmentOutput);
     auto submit_args = vk::SubmitInfo()
-        .setWaitSemaphores(*(this->whenImageAccquired))
+        .setWaitSemaphores(*(frame.whenImageAccquired))
         .setWaitDstStageMask(wait_dst_stage_mask)
-        .setCommandBuffers(*(this->commandBuffer))
+        .setCommandBuffers(*(frame.commands))
         .setSignalSemaphores(*(this->whenRenderedToImage[image_index]));
 
-    this->queue.submit(submit_args, *(this->whenRenderedToFrameJoin));
+    this->queue.submit(submit_args, *(frame.whenRenderedToFrameJoin));
 
     
     auto present_args = vk::PresentInfoKHR()
@@ -639,4 +648,10 @@ void VulkanContext::renderFrame() {
         .setImageIndices(image_index);
 
     auto present_result = this->queue.presentKHR(present_args);
+
+    this->currentRenderingFrame = (this->currentRenderingFrame + 1) % VulkanContext::MAX_FRAMES_IN_FLIGHT;
+}
+
+void VulkanContext::onShutdown() {
+    this->device.waitIdle();
 }
