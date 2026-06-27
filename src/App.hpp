@@ -32,11 +32,7 @@ private:
     vk::raii::Queue queue = nullptr;
     uint32_t queueFamilyIndex; 
 
-    vk::raii::SwapchainKHR swapChain = nullptr;
-    vk::SurfaceFormatKHR swapChainSurfaceFormat;
-    vk::Extent2D swapChainExtent;
-    std::vector<vk::Image> swapChainImages;
-    std::vector<vk::raii::ImageView> swapChainImageViews;
+    VkUtil::SwapChain swapChain = nullptr;
 
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline renderPipeline = nullptr;
@@ -74,7 +70,7 @@ private:
             .setOldLayout(fromLayout).setNewLayout(toLayout)
             .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
             .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-            .setImage(this->swapChainImages[imageIndx])
+            .setImage(this->swapChain.images[imageIndx])
             .setSubresourceRange(
                 vk::ImageSubresourceRange()
                     .setAspectMask(vk::ImageAspectFlagBits::eColor)

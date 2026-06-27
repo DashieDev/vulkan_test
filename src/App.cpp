@@ -360,11 +360,11 @@ namespace {
 
 void VulkanContext::createSwapChain() {
     auto surface_cap = this->physicalDevice.getSurfaceCapabilitiesKHR( *(this->surface) );
-    this->swapChainExtent = chooseSwapExtent(surface_cap);
+    this->swapChain.extent = chooseSwapExtent(surface_cap);
     uint32_t min_image_count = chooseSwapMinImageCount(surface_cap);
     
     auto provided_formats = this->physicalDevice.getSurfaceFormatsKHR( *(this->surface) );
-    this->swapChainSurfaceFormat = chooseSwapSurfaceFormat(provided_formats);
+    this->swapChain.surfaceFormat = chooseSwapSurfaceFormat(provided_formats);
 
     auto provided_present_modes = this->physicalDevice.getSurfacePresentModesKHR( surface );
     auto present_mode = chooseSwapPresentMode(provided_present_modes);
@@ -372,9 +372,9 @@ void VulkanContext::createSwapChain() {
     auto swap_chain_create_args = vk::SwapchainCreateInfoKHR()
         .setSurface(*surface)
         .setMinImageCount(min_image_count)
-        .setImageFormat(this->swapChainSurfaceFormat.format)
-        .setImageColorSpace(this->swapChainSurfaceFormat.colorSpace)
-        .setImageExtent(this->swapChainExtent)
+        .setImageFormat(this->swapChain.surfaceFormat.format)
+        .setImageColorSpace(this->swapChain.surfaceFormat.colorSpace)
+        .setImageExtent(this->swapChain.extent)
         .setPresentMode(present_mode)
         .setImageArrayLayers(1)
         .setImageUsage(vk::ImageUsageFlagBits::eColorAttachment)
@@ -383,26 +383,26 @@ void VulkanContext::createSwapChain() {
         .setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
         .setClipped(true);
 
-    this->swapChain = vk::raii::SwapchainKHR(this->device, swap_chain_create_args);
-    this->swapChainImages = this->swapChain.getImages();
+    this->swapChain.swapChain = vk::raii::SwapchainKHR(this->device, swap_chain_create_args);
+    this->swapChain.images = this->swapChain.swapChain.getImages();
     ChopinLogger::l("Accquired swap chain with:");
     ChopinLogger::l(std::format("Swap Extent : {} x {}", 
-        this->swapChainExtent.width, this->swapChainExtent.height));
+        this->swapChain.extent.width, this->swapChain.extent.height));
     ChopinLogger::l(std::format("Min Images Count : {}", min_image_count));
-    ChopinLogger::l(std::format("Format - Color Space : {}", vk::to_string(this->swapChainSurfaceFormat.colorSpace)));
-    ChopinLogger::l(std::format("Format - Format : {}", vk::to_string(this->swapChainSurfaceFormat.format)));
+    ChopinLogger::l(std::format("Format - Color Space : {}", vk::to_string(this->swapChain.surfaceFormat.colorSpace)));
+    ChopinLogger::l(std::format("Format - Format : {}", vk::to_string(this->swapChain.surfaceFormat.format)));
     ChopinLogger::l(std::format("Present Mode : {}", vk::to_string(present_mode)));
-    ChopinLogger::l(std::format("Images Count : {}", this->swapChainImages.size()));
+    ChopinLogger::l(std::format("Images Count : {}", this->swapChain.images.size()));
 
     ChopinLogger::l("========");
 }
 
 void VulkanContext::createImageViews() {
-    assert(this->swapChainImageViews.empty());
+    assert(this->swapChain.imageViews.empty());
     
     auto image_create_args = vk::ImageViewCreateInfo()
         .setViewType(vk::ImageViewType::e2D)
-        .setFormat(this->swapChainSurfaceFormat.format)
+        .setFormat(this->swapChain.surfaceFormat.format)
         .setSubresourceRange(
             vk::ImageSubresourceRange()
                 .setAspectMask(vk::ImageAspectFlagBits::eColor)
@@ -412,8 +412,8 @@ void VulkanContext::createImageViews() {
                 .setLayerCount(1)
         );
 
-    for (auto &image : swapChainImages){
-        this->swapChainImageViews
+    for (auto &image : this->swapChain.images){
+        this->swapChain.imageViews
             .emplace_back( device, image_create_args.setImage(image) );
     }
 }
@@ -506,7 +506,7 @@ void VulkanContext::setupRenderPipeline() {
             .setLayout(this->pipelineLayout)
             .setRenderPass(nullptr),
         vk::PipelineRenderingCreateInfo()
-            .setColorAttachmentFormats(this->swapChainSurfaceFormat.format)
+            .setColorAttachmentFormats(this->swapChain.surfaceFormat.format)
     };
     
     this->renderPipeline = vk::raii::Pipeline(this->device, nullptr, 
@@ -546,7 +546,7 @@ void VulkanContext::setupRenderingFramesAndImages() {
 
 
     ListUtil::initWithFactory(this->whenRenderedToImage,
-        this->swapChainImages.size(),
+        this->swapChain.images.size(),
         [&]() {
             return vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
         } 
@@ -571,14 +571,14 @@ void VulkanContext::recordCommandBuffer(const VkUtil::RenderingFrame& frame, uin
 
     auto clear_color = vk::ClearColorValue(0.f, 0.f, 0.f, 1.f);
     auto attachment_info = vk::RenderingAttachmentInfo()
-        .setImageView(this->swapChainImageViews[imageIndex])
+        .setImageView(this->swapChain.imageViews[imageIndex])
         .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
         .setLoadOp(vk::AttachmentLoadOp::eClear)
         .setStoreOp(vk::AttachmentStoreOp::eStore)
         .setClearValue(clear_color);
 
     auto rendering_info = vk::RenderingInfo()
-        .setRenderArea(vk::Rect2D({0, 0}, this->swapChainExtent))
+        .setRenderArea(vk::Rect2D({0, 0}, this->swapChain.extent))
         .setLayerCount(1)
         .setColorAttachments(attachment_info);
 
@@ -590,12 +590,12 @@ void VulkanContext::recordCommandBuffer(const VkUtil::RenderingFrame& frame, uin
     
     auto viewport = vk::Viewport()
         .setX(0.f).setY(0.f)
-        .setWidth(this->swapChainExtent.width)
-        .setHeight(this->swapChainExtent.height)
+        .setWidth(this->swapChain.extent.width)
+        .setHeight(this->swapChain.extent.height)
         .setMinDepth(0.f).setMaxDepth(1.f);
     
     auto scrissor = vk::Rect2D()
-        .setOffset({0, 0}).setExtent(this->swapChainExtent);
+        .setOffset({0, 0}).setExtent(this->swapChain.extent);
 
     frame.commands.setViewport(0, viewport);
     frame.commands.setScissor(0, scrissor);
@@ -627,7 +627,7 @@ void VulkanContext::renderFrame() {
 
     VkUtil::waitFenceAndReset(this->device, frame.whenRenderedToFrameJoin);
 
-    auto [r1, image_index] = swapChain.acquireNextImage(UINT64_MAX, *(frame.whenImageAccquired), nullptr);
+    auto [r1, image_index] = swapChain.swapChain.acquireNextImage(UINT64_MAX, *(frame.whenImageAccquired), nullptr);
 
     this->recordCommandBuffer(frame, image_index);
 
@@ -644,7 +644,7 @@ void VulkanContext::renderFrame() {
     
     auto present_args = vk::PresentInfoKHR()
         .setWaitSemaphores(*(this->whenRenderedToImage[image_index]))
-        .setSwapchains(*(this->swapChain))
+        .setSwapchains(*(this->swapChain.swapChain))
         .setImageIndices(image_index);
 
     auto present_result = this->queue.presentKHR(present_args);
